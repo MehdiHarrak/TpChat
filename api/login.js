@@ -34,42 +34,80 @@ function getRedis() {
 
 export default async function handler(request) {
     try {
-        const {username, password} = await request.json();
+        console.log("Login API called");
+        const body = await request.json();
+        const {username, password} = body;
+        
+        if (!username || !password) {
+            console.error("Missing username or password");
+            return new Response(JSON.stringify({code: "MISSING_FIELDS", message: "Username and password are required"}), {
+                status: 400,
+                headers: {'content-type': 'application/json'},
+            });
+        }
+        
+        console.log("Attempting login for username:", username);
+        
         const hash = await crypto.subtle.digest('SHA-256', stringToArrayBuffer(username + password));
         const hashed64 = arrayBufferToBase64(hash);
+        console.log("Password hash calculated");
 
         const {rowCount, rows} = await sql`select * from users where username = ${username} and password = ${hashed64}`;
+        console.log("Database query result - rowCount:", rowCount);
+        
         if (rowCount !== 1) {
+            console.log("Login failed - user not found or password incorrect");
             const error = {code: "UNAUTHORIZED", message: "Identifiant ou mot de passe incorrect"};
             return new Response(JSON.stringify(error), {
                 status: 401,
                 headers: {'content-type': 'application/json'},
             });
         } else {
+            console.log("User found, updating last_login");
             await sql`update users set last_login = now() where user_id = ${rows[0].user_id}`;
             const token = crypto.randomUUID().toString();
             const user = {id: rows[0].user_id, username: rows[0].username, email: rows[0].email, externalId: rows[0].external_id}
             
+            console.log("Storing session in Redis");
             try {
                 const redis = getRedis();
-                await redis.set(token, user, { ex: 3600 });
-                const userInfo = {};
-                userInfo[user.id] = user;
-                await redis.hset("users", userInfo);
+                if (!redis) {
+                    console.warn("Redis not available, continuing without session storage");
+                } else {
+                    await redis.set(token, user, { ex: 3600 });
+                    const userInfo = {};
+                    userInfo[user.id] = user;
+                    await redis.hset("users", userInfo);
+                    console.log("Session stored in Redis successfully");
+                }
             } catch (redisError) {
                 console.error("Redis error during login:", redisError);
+                console.error("Redis error details:", {
+                    message: redisError.message,
+                    stack: redisError.stack
+                });
                 // Still return success but log the error
                 // The user can still login, but session won't be stored in Redis
+                console.warn("Continuing login without Redis session storage");
             }
 
+            console.log("Login successful, returning token");
             return new Response(JSON.stringify({token: token, username: username, externalId: rows[0].external_id, id: rows[0].user_id}), {
                 status: 200,
                 headers: {'content-type': 'application/json'},
             });
         }
     } catch (error) {
-        console.log(error);
-        return new Response(JSON.stringify(error), {
+        console.error("Login API error:", error);
+        console.error("Error details:", {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+        });
+        return new Response(JSON.stringify({
+            code: "INTERNAL_ERROR",
+            message: error.message || "An error occurred during login"
+        }), {
             status: 500,
             headers: {'content-type': 'application/json'},
         });
