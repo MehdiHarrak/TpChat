@@ -5,8 +5,13 @@ export const config = {
 import PushNotifications from "@pusher/push-notifications-server";
 import { Redis } from '@upstash/redis';
 
-// Initialize Redis - support both UPSTASH and KV (Vercel) environment variables
+// Initialize Redis - support both UPSTASH and KV (Vercel) environment variables (lazy initialization)
+let redisInstance = null;
 function getRedis() {
+    if (redisInstance) {
+        return redisInstance;
+    }
+    
     const restUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
     const restToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
     
@@ -15,10 +20,9 @@ function getRedis() {
     }
     
     const cleanUrl = restUrl.replace(/\/$/, '');
-    return new Redis({ url: cleanUrl, token: restToken });
+    redisInstance = new Redis({ url: cleanUrl, token: restToken });
+    return redisInstance;
 }
-
-const redis = getRedis();
 
 // Node.js compatible authentication functions
 async function getConnecterUser(req) {
@@ -28,6 +32,7 @@ async function getConnecterUser(req) {
     token = token.replace("Bearer ", "");
     console.log("checking " + token);
   
+    const redis = getRedis();
     const user = await redis.get(token);
     if (user) console.log("Got user :", user.username);
     return user;

@@ -6,8 +6,13 @@ export const config = {
     runtime: 'edge',
 };
 
-// Helper function to initialize Redis
+// Helper function to initialize Redis (lazy initialization with caching)
+let redisInstance = null;
 function getRedis() {
+    if (redisInstance) {
+        return redisInstance;
+    }
+    
     // Get Redis connection details - support both UPSTASH and KV (Vercel) variables
     const restUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
     const restToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
@@ -20,10 +25,12 @@ function getRedis() {
     const cleanUrl = restUrl.replace(/\/$/, '');
     
     // Create Redis client with explicit configuration
-    return new Redis({ 
+    redisInstance = new Redis({ 
         url: cleanUrl, 
         token: restToken 
     });
+    
+    return redisInstance;
 }
 
 export default async function handler(request) {
