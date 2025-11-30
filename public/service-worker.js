@@ -1,25 +1,50 @@
-// proper initialization
-if( 'function' === typeof importScripts) {
-  /* eslint-disable no-undef */
-  importScripts("https://js.pusher.com/beams/service-worker.js");
-}
+// service-worker.js
+// Ce service worker gère les notifications push pour Pusher Beams
 
-PusherPushNotifications.onNotificationReceived = ({
-  pushEvent,
-  payload,
-  handleNotification,
-}) => {
+self.addEventListener('push', function(event) {
+    console.log('Push event received:', event);
+    
+    if (event.data) {
+        const data = event.data.json();
+        console.log('Push data:', data);
+        
+        const options = {
+            body: data.web.notification.body,
+            icon: data.web.notification.icon || '/favicon.ico',
+            badge: '/favicon.ico',
+            tag: 'chat-notification',
+            data: data.web.data || {},
+            actions: [
+                {
+                    action: 'open',
+                    title: 'Ouvrir la conversation'
+                },
+                {
+                    action: 'close',
+                    title: 'Fermer'
+                }
+            ]
+        };
+        
+        event.waitUntil(
+            self.registration.showNotification(data.web.notification.title, options)
+        );
+    }
+});
 
-  console.log("worker got : " + JSON.stringify(payload));
+self.addEventListener('notificationclick', function(event) {
+    console.log('Notification clicked:', event);
+    
+    event.notification.close();
+    
+    if (event.action === 'open' || !event.action) {
+        // Ouvrir l'application
+        event.waitUntil(
+            clients.openWindow('/chat')
+        );
+    }
+});
 
-  // Get the client.
-  self.clients.matchAll().then((matchedClient) => matchedClient.forEach(client => {
-    client.postMessage(payload.data);
-  }));
-
-  // Your custom notification handling logic here 🛠️
-  // This method triggers the default notification handling logic offered by
-  // the Beams SDK. This gives you an opportunity to modify the payload.
-  // E.g. payload.notification.title = "A client-determined title!"
-  pushEvent.waitUntil(handleNotification(payload));
-};
+self.addEventListener('notificationclose', function(event) {
+    console.log('Notification closed:', event);
+});

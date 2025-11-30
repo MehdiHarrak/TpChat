@@ -1,0 +1,22 @@
+{
+  "users": [
+    { "id": "1", "name": "zdeqsd", "lastMessage": "Hello!", "lastTime": "10:24" },
+    { "id": "2", "name": "thibault2", "lastMessage": "Good morning!", "lastTime": "09:22" },
+    { "id": "3", "name": "thibault", "lastMessage": "Hey, what's up?", "lastTime": "09:12" },
+    { "id": "4", "name": "l20020022", "lastMessage": "Hello, anyone here?", "lastTime": "09:09" }
+  ],
+  "rooms": [
+    { "id": "1", "name": "General" },
+    { "id": "2", "name": "News" },
+    { "id": "3", "name": "Random" }
+  ],
+  "messages": {
+    "1": [
+      { "id": "1", "fromMe": true, "text": "Hello, zdeqsd!", "time": "10:25" },
+      { "id": "2", "fromMe": false, "text": "Hi, thibault!", "time": "10:26" }
+    ],
+    "2": [
+      { "id": "3", "fromMe": true, "text": "Good morning, all!", "time": "09:30" }
+    ]
+  }
+}
