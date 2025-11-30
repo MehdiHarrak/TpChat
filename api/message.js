@@ -34,20 +34,29 @@ function getRedis() {
 
 // Node.js compatible authentication function
 async function getConnecterUser(req) {
-    let token = req.headers.authorization;
-    if (!token) return null;
-  
-    token = token.replace("Bearer ", "");
-    console.log("checking " + token);
-  
-    const redis = getRedis();
-    const user = await redis.get(token);
-    if (user) console.log("Got user :", user.username);
-    return user;
+    try {
+        let token = req.headers.authorization;
+        if (!token) return null;
+      
+        token = token.replace("Bearer ", "");
+        console.log("checking " + token);
+      
+        const redis = getRedis();
+        const user = await redis.get(token);
+        if (user) console.log("Got user :", user.username);
+        return user;
+    } catch (error) {
+        console.error("Error in getConnecterUser:", error);
+        return null;
+    }
 }
 
 export default async function handler(req, res) {
     try {
+        console.log("Message API called, method:", req.method);
+        console.log("Request body type:", typeof req.body);
+        console.log("Request body:", req.body);
+        
         // Check if the user is authenticated
         const user = await getConnecterUser(req);
         if (!user) {
@@ -55,7 +64,18 @@ export default async function handler(req, res) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
 
-        const { recipient_id, content, room_id } = req.body;
+        // Parse body if it's a string (Node.js runtime might not auto-parse)
+        let body = req.body;
+        if (typeof body === 'string') {
+            try {
+                body = JSON.parse(body);
+            } catch (parseError) {
+                console.error("Error parsing body:", parseError);
+                return res.status(400).json({ error: 'Invalid JSON in request body' });
+            }
+        }
+        
+        const { recipient_id, content, room_id } = body;
         
         // Validate required fields
         if (!content) {
@@ -71,13 +91,40 @@ export default async function handler(req, res) {
         console.log('Content:', content);
 
         // Insert message into database
-        const { rows } = await sql`
-            INSERT INTO messages (room_id, sender_id, recipient_id, content, sent_at)
-            VALUES (${room_id || null}, ${sender_id}, ${recipient_id || null}, ${content}, now())
-            RETURNING message_id, sent_at
-        `;
+        let rows;
+        try {
+            console.log("Attempting to insert message into database...");
+            console.log("SQL values:", { room_id, sender_id, recipient_id, content });
+            
+            const result = await sql`
+                INSERT INTO messages (room_id, sender_id, recipient_id, content, sent_at)
+                VALUES (${room_id || null}, ${sender_id}, ${recipient_id || null}, ${content}, now())
+                RETURNING message_id, sent_at
+            `;
+            
+            console.log("SQL result:", result);
+            rows = result.rows || result;
+            console.log("Rows:", rows);
+            console.log(`Message sent by user ${sender_id} to room ${room_id || 'private'}`);
+        } catch (dbError) {
+            console.error("Database error:", dbError);
+            console.error("Database error details:", {
+                message: dbError.message,
+                stack: dbError.stack,
+                code: dbError.code,
+                name: dbError.name
+            });
+            return res.status(500).json({ 
+                error: 'Database error',
+                message: dbError.message,
+                code: dbError.code
+            });
+        }
 
-        console.log(`Message sent by user ${sender_id} to room ${room_id || 'private'}`);
+        if (!rows || rows.length === 0) {
+            console.error("No rows returned from INSERT");
+            return res.status(500).json({ error: 'Failed to insert message' });
+        }
 
         // Envoyer une notification Push si c'est un message privé
         if (recipient_id && !room_id) {
@@ -129,10 +176,16 @@ export default async function handler(req, res) {
         });
     } catch (error) {
         console.error("Error in message API:", error);
-        console.error("Error details:", error.message, error.stack);
+        console.error("Error details:", {
+            message: error.message,
+            stack: error.stack,
+            name: error.name,
+            code: error.code
+        });
         return res.status(500).json({ 
             error: 'Internal server error',
-            message: error.message 
+            message: error.message,
+            ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
         });
     }
 }
