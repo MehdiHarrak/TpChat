@@ -7,48 +7,39 @@ export const config = {
 
 export default async function handler(request) {
     try {
-        // Check if the user is authenticated
         const connected = await checkSession(request);
         if (!connected) {
-            console.log("Not connected");
             return unauthorizedResponse();
         }
 
-        // Get the current user to exclude them from the list
         const currentUser = await getConnecterUser(request);
         if (!currentUser) {
-            console.log("No user found in session");
             return unauthorizedResponse();
         }
 
         const currentUserId = currentUser.id;
-        console.log(`Excluding current user ID: ${currentUserId}`);
 
-        // Fetch users from the database, excluding the current user
         const { rowCount, rows } = await sql`
             SELECT user_id, username, TO_CHAR(last_login, 'DD/MM/YYYY HH24:MI') as last_login
             FROM users
             WHERE user_id != ${currentUserId}
             ORDER BY last_login DESC
         `;
-        console.log("Got " + rowCount + " users");
 
-        // If no users are found, return an empty array
         if (rowCount === 0) {
             return new Response("[]", {
                 status: 200,
                 headers: { 'content-type': 'application/json' },
             });
         } else {
-            // Return the users in JSON format
             return new Response(JSON.stringify(rows), {
                 status: 200,
                 headers: { 'content-type': 'application/json' },
             });
         }
     } catch (error) {
-        console.log(error);
-        return new Response(JSON.stringify(error), {
+        console.error("Erreur users API:", error);
+        return new Response(JSON.stringify({error: "Erreur serveur"}), {
             status: 500,
             headers: { 'content-type': 'application/json' },
         });

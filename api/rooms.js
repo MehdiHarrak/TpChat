@@ -7,10 +7,8 @@ export const config = {
 
 export default async function handler(request) {
     try {
-        // Check if the user is authenticated
         const connected = await checkSession(request);
         if (!connected) {
-            console.log("Not connected");
             return unauthorizedResponse();
         }
 
@@ -18,7 +16,6 @@ export default async function handler(request) {
             SELECT room_id, name
             FROM rooms
         `;
-        console.log("Got " + rowCount + " rooms");
 
         if (rowCount === 0) {
             return new Response("[]", {
@@ -32,8 +29,8 @@ export default async function handler(request) {
             });
         }
     } catch (error) {
-        console.log(error);
-        return new Response(JSON.stringify(error), {
+        console.error("Erreur rooms API:", error);
+        return new Response(JSON.stringify({error: "Erreur serveur"}), {
             status: 500,
             headers: { 'content-type': 'application/json' },
         });

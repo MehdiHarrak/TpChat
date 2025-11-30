@@ -7,30 +7,19 @@ export const config = {
 
 export default async function handler(request) {
     try {
-        console.log('Messages API called');
-        
-        // Check if the user is authenticated
         const connected = await checkSession(request);
         if (!connected) {
-            console.log("Not connected");
             return unauthorizedResponse();
         }
 
-        // Get the current user
         const currentUser = await getConnecterUser(request);
         if (!currentUser) {
-            console.log("No user found in session");
             return unauthorizedResponse();
         }
         
         const currentUserId = currentUser.id;
-        console.log(`Current user ID: ${currentUserId}`);
-
-        // Extract room_id from query parameters
         const url = new URL(request.url);
         const roomId = url.searchParams.get('roomId');
-        
-        console.log('Room ID from query:', roomId);
         
         if (!roomId) {
             return new Response(JSON.stringify({ error: 'Room ID is required' }), {
@@ -47,9 +36,6 @@ export default async function handler(request) {
             });
         }
 
-        console.log(`Fetching messages for room: ${roomIdInt}, user: ${currentUserId}`);
-
-        // Query with sender username - join with users table
         const { rows } = await sql`
             SELECT 
                 m.message_id,
@@ -63,9 +49,6 @@ export default async function handler(request) {
             ORDER BY m.sent_at ASC
         `;
         
-        console.log(`Got ${rows.length} messages for room ${roomIdInt}`);
-
-        // Format messages efficiently with sender name
         const formattedMessages = rows.map(msg => ({
             id: msg.message_id.toString(),
             text: msg.content,
@@ -74,19 +57,13 @@ export default async function handler(request) {
             senderName: msg.sender_name
         }));
 
-        // Return the messages in JSON format
         return new Response(JSON.stringify(formattedMessages), {
             status: 200,
             headers: { 'content-type': 'application/json' },
         });
         
     } catch (error) {
-        console.error('Messages API Error:', error);
-        console.error('Error details:', {
-            message: error.message,
-            stack: error.stack,
-            name: error.name
-        });
+        console.error("Erreur messages API:", error);
         return new Response(JSON.stringify({ 
             error: 'Internal server error',
             details: error.message 
