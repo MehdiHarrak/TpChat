@@ -46,14 +46,47 @@ export default async function handler(request) {
             });
         }
         
-        console.log("Attempting login for username:", username);
+        console.log("Attempting login for username/email:", username);
         
-        const hash = await crypto.subtle.digest('SHA-256', stringToArrayBuffer(username + password));
+        // First, find the user by username OR email (without password check)
+        // This allows users to login with either their username or email
+        const {rowCount: userCount, rows: userRows} = await sql`
+            SELECT * FROM users 
+            WHERE username = ${username} OR email = ${username}
+        `;
+        console.log("User lookup result - rowCount:", userCount);
+        
+        if (userCount === 0) {
+            console.log("User not found");
+            const error = {code: "UNAUTHORIZED", message: "Identifiant ou mot de passe incorrect"};
+            return new Response(JSON.stringify(error), {
+                status: 401,
+                headers: {'content-type': 'application/json'},
+            });
+        }
+        
+        // Use the actual username from database to calculate hash (not the input)
+        // This ensures the hash matches what was stored during signup
+        const actualUsername = userRows[0].username;
+        console.log("Found user with username:", actualUsername);
+        
+        const hash = await crypto.subtle.digest('SHA-256', stringToArrayBuffer(actualUsername + password));
         const hashed64 = arrayBufferToBase64(hash);
-        console.log("Password hash calculated");
+        console.log("Password hash calculated with actual username");
 
-        const {rowCount, rows} = await sql`select * from users where username = ${username} and password = ${hashed64}`;
-        console.log("Database query result - rowCount:", rowCount);
+        // Now verify the password hash matches
+        if (userRows[0].password !== hashed64) {
+            console.log("Password hash does not match");
+            const error = {code: "UNAUTHORIZED", message: "Identifiant ou mot de passe incorrect"};
+            return new Response(JSON.stringify(error), {
+                status: 401,
+                headers: {'content-type': 'application/json'},
+            });
+        }
+        
+        const rows = userRows;
+        const rowCount = userCount;
+        console.log("Password verified successfully");
         
         if (rowCount !== 1) {
             console.log("Login failed - user not found or password incorrect");
