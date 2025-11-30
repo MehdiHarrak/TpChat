@@ -13,24 +13,31 @@ function getRedis() {
         return redisInstance;
     }
     
-    // Get Redis connection details - support both UPSTASH and KV (Vercel) variables
-    const restUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-    const restToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
-    
-    if (!restUrl || !restToken) {
-        throw new Error("Redis configuration not found. Need UPSTASH_REDIS_REST_URL/UPSTASH_REDIS_REST_TOKEN or KV_REST_API_URL/KV_REST_API_TOKEN");
+    try {
+        // Get Redis connection details - support both UPSTASH and KV (Vercel) variables
+        const restUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+        const restToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+        
+        if (!restUrl || !restToken) {
+            const errorMsg = `Redis configuration not found. UPSTASH_REDIS_REST_URL: ${!!process.env.UPSTASH_REDIS_REST_URL}, KV_REST_API_URL: ${!!process.env.KV_REST_API_URL}, UPSTASH_REDIS_REST_TOKEN: ${!!process.env.UPSTASH_REDIS_REST_TOKEN}, KV_REST_API_TOKEN: ${!!process.env.KV_REST_API_TOKEN}`;
+            console.error(errorMsg);
+            throw new Error(errorMsg);
+        }
+        
+        // Ensure URL doesn't have trailing slash and is properly formatted
+        const cleanUrl = restUrl.replace(/\/$/, '');
+        
+        // Create Redis client with explicit configuration
+        redisInstance = new Redis({ 
+            url: cleanUrl, 
+            token: restToken 
+        });
+        
+        return redisInstance;
+    } catch (error) {
+        console.error("Failed to initialize Redis:", error);
+        throw error;
     }
-    
-    // Ensure URL doesn't have trailing slash and is properly formatted
-    const cleanUrl = restUrl.replace(/\/$/, '');
-    
-    // Create Redis client with explicit configuration
-    redisInstance = new Redis({ 
-        url: cleanUrl, 
-        token: restToken 
-    });
-    
-    return redisInstance;
 }
 
 export default async function handler(request) {

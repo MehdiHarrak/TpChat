@@ -13,16 +13,23 @@ function getRedis() {
         return redisInstance;
     }
     
-    const restUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-    const restToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
-    
-    if (!restUrl || !restToken) {
-        throw new Error("Redis configuration not found");
+    try {
+        const restUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+        const restToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+        
+        if (!restUrl || !restToken) {
+            const errorMsg = `Redis configuration not found. UPSTASH_REDIS_REST_URL: ${!!process.env.UPSTASH_REDIS_REST_URL}, KV_REST_API_URL: ${!!process.env.KV_REST_API_URL}`;
+            console.error(errorMsg);
+            throw new Error(errorMsg);
+        }
+        
+        const cleanUrl = restUrl.replace(/\/$/, '');
+        redisInstance = new Redis({ url: cleanUrl, token: restToken });
+        return redisInstance;
+    } catch (error) {
+        console.error("Failed to initialize Redis:", error);
+        throw error;
     }
-    
-    const cleanUrl = restUrl.replace(/\/$/, '');
-    redisInstance = new Redis({ url: cleanUrl, token: restToken });
-    return redisInstance;
 }
 
 // Node.js compatible authentication function

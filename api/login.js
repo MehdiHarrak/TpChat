@@ -13,16 +13,23 @@ function getRedis() {
         return redisInstance;
     }
     
-    const restUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-    const restToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
-    
-    if (!restUrl || !restToken) {
-        throw new Error("Redis configuration not found");
+    try {
+        const restUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+        const restToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+        
+        if (!restUrl || !restToken) {
+            const errorMsg = `Redis configuration not found. UPSTASH_REDIS_REST_URL: ${!!process.env.UPSTASH_REDIS_REST_URL}, KV_REST_API_URL: ${!!process.env.KV_REST_API_URL}`;
+            console.error(errorMsg);
+            throw new Error(errorMsg);
+        }
+        
+        const cleanUrl = restUrl.replace(/\/$/, '');
+        redisInstance = new Redis({ url: cleanUrl, token: restToken });
+        return redisInstance;
+    } catch (error) {
+        console.error("Failed to initialize Redis:", error);
+        throw error;
     }
-    
-    const cleanUrl = restUrl.replace(/\/$/, '');
-    redisInstance = new Redis({ url: cleanUrl, token: restToken });
-    return redisInstance;
 }
 
 export default async function handler(request) {
@@ -42,11 +49,18 @@ export default async function handler(request) {
             await sql`update users set last_login = now() where user_id = ${rows[0].user_id}`;
             const token = crypto.randomUUID().toString();
             const user = {id: rows[0].user_id, username: rows[0].username, email: rows[0].email, externalId: rows[0].external_id}
-            const redis = getRedis();
-            await redis.set(token, user, { ex: 3600 });
-            const userInfo = {};
-            userInfo[user.id] = user;
-            await redis.hset("users", userInfo);
+            
+            try {
+                const redis = getRedis();
+                await redis.set(token, user, { ex: 3600 });
+                const userInfo = {};
+                userInfo[user.id] = user;
+                await redis.hset("users", userInfo);
+            } catch (redisError) {
+                console.error("Redis error during login:", redisError);
+                // Still return success but log the error
+                // The user can still login, but session won't be stored in Redis
+            }
 
             return new Response(JSON.stringify({token: token, username: username, externalId: rows[0].external_id, id: rows[0].user_id}), {
                 status: 200,
